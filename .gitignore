@@ -15,7 +15,8 @@ profiles_settings.json
 tatus
 
 # 忽略文档
-*.md
+# *.md   # 取消忽略所有md文件
+# 允许README.md被追踪
 
 # 忽略结果文件
 *_result*
