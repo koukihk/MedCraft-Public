@@ -1,0 +1,22 @@
+# 忽略IDE相关文件
+.idea/
+.DS_Store
+
+# 忽略数据文件
+datafolds/
+documents/
+figures/
+
+# 忽略配置文件
+*.xml
+profiles_settings.json
+
+# 忽略临时文件
+tatus
+
+# 忽略文档
+*.md
+
+# 忽略结果文件
+*_result*
+analyzer_inference.py 
