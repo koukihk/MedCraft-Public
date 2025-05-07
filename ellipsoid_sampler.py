@@ -75,7 +75,7 @@ def get_absolute_coordinate(relative_coordinate, original_shape, target_volume, 
 
 
 def is_edge_point(mask, point, edge_op="erosion", neighborhood_size=(3, 3, 3), volume_threshold=5,
-                 sobel_threshold=405, erosion_kernel_size=5):
+                 sobel_threshold=400, erosion_kernel_size=5):
     """
     判断点是否在边缘
     
