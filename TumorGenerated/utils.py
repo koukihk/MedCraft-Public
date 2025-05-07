@@ -196,7 +196,7 @@ def check_sobel(mask_scan, potential_point, sobel_threshold=405, sobel_neighborh
     return gradient_value > sobel_threshold
 
 def is_edge_point(mask_scan, potential_point, edge_op="both", neighborhood_size=(3, 3, 3), volume_threshold=5,
-                  sobel_threshold=405, erosion_kernel_size=5):
+                  sobel_threshold=400, erosion_kernel_size=5):
     def check_volume():
         # Define the boundaries of the neighborhood around the potential point
         min_bounds = np.maximum(potential_point - np.array(neighborhood_size) // 2, 0)
@@ -502,7 +502,7 @@ def get_tumor(volume_scan, mask_scan, tumor_type, texture, edge_advanced_blur=Fa
 
     sigma = np.random.uniform(1, 2)
     if edge_advanced_blur:
-        sigma = np.random.uniform(1.0, 2.1)
+        sigma = np.random.uniform(1.0, 2.2)
     difference = np.random.uniform(65, 145)
 
     # blur the boundary
