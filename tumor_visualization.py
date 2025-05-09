@@ -3,10 +3,11 @@ import argparse
 import numpy as np
 import nibabel as nib
 import matplotlib.pyplot as plt
-from matplotlib.patches import Rectangle
+from matplotlib.patches import Rectangle, Polygon
 import matplotlib.colors as mcolors
 from scipy import ndimage
 import glob
+from skimage import measure
 
 def voxel2R(A):
     """Convert voxel volume to sphere radius (unit: mm)"""
@@ -75,10 +76,10 @@ def analyze_tumors(tumor_mask, spacing_mm):
             # Find tumor center
             pos = ndimage.center_of_mass(tumor_region)
             
-            # Find 2D bounding box
-            positions = np.where(tumor_region)
-            z_indices = positions[2]
-            if len(z_indices) == 0:
+            # Find 2D slices where this tumor appears
+            z_positions = np.unique(np.where(tumor_region)[2])
+            
+            if len(z_positions) == 0:
                 continue
                 
             size_category = ""
@@ -94,10 +95,69 @@ def analyze_tumors(tumor_mask, spacing_mm):
                 "radius_mm": tumor_radius_mm,
                 "volume_mm3": tumor_volume_mm,
                 "size_category": size_category,
-                "region": tumor_region
+                "region": tumor_region,
+                "z_positions": z_positions
             })
     
     return tumor_info
+
+def find_tumor_contours(tumor_mask, z_slice):
+    """Find exact contours of tumor regions in the given slice"""
+    # Extract the slice
+    slice_tumor = tumor_mask[:, :, z_slice].T
+    
+    # If no tumor in this slice, return empty list
+    if np.sum(slice_tumor) == 0:
+        return [], []
+    
+    # Find connected components
+    labeled, num_components = ndimage.label(slice_tumor)
+    
+    tumors = []
+    contours = []
+    
+    # Process each component
+    for idx in range(1, num_components + 1):
+        component = (labeled == idx)
+        if np.sum(component) < 5:  # Skip very small components
+            continue
+        
+        # Find the contour
+        component_contours = measure.find_contours(component.astype(float), 0.5)
+        
+        if not component_contours:
+            continue
+            
+        # Get the largest contour for this component
+        largest_contour = max(component_contours, key=len)
+        
+        # Calculate area and center
+        area = np.sum(component)
+        center = ndimage.center_of_mass(component)
+        
+        # Calculate bounding box
+        rows, cols = np.where(component)
+        if len(rows) == 0 or len(cols) == 0:
+            continue
+            
+        min_r, max_r = np.min(rows), np.max(rows)
+        min_c, max_c = np.min(cols), np.max(cols)
+        
+        # Calculate tumor size in mm
+        area_mm = pixel2voxel(area, (1, 1, 1))  # We'll update this with real spacing later
+        radius_mm = voxel2R(area_mm)
+        
+        tumors.append({
+            "area": area,
+            "center": center,
+            "bbox": (min_c, min_r, max_c, max_r),
+            "radius_mm": radius_mm,
+            "contour": largest_contour
+        })
+        
+        contours.append(largest_contour)
+    
+    return tumors, contours
 
 def create_visualization(scan_path, label_path, model_dirs, output_path):
     """Create visualization of tumor segmentation"""
@@ -120,7 +180,7 @@ def create_visualization(scan_path, label_path, model_dirs, output_path):
     tumor_mask = np.zeros_like(label_data)
     tumor_mask[label_data == 2] = 1
     
-    # Analyze tumor information
+    # Analyze tumor information for entire volume
     tumor_info = analyze_tumors(tumor_mask, spacing_mm)
     
     # Get liver region bounding box
@@ -134,6 +194,14 @@ def create_visualization(scan_path, label_path, model_dirs, output_path):
     
     # Ensure slice is within liver range
     optimal_slice = max(z_range[0], min(optimal_slice, z_range[1]))
+    
+    # Find exact tumor contours in the selected slice
+    slice_tumors, tumor_contours = find_tumor_contours(tumor_mask, optimal_slice)
+    
+    # Update tumor radius calculations with proper spacing
+    for tumor in slice_tumors:
+        area_mm = pixel2voxel(tumor["area"], spacing_mm)
+        tumor["radius_mm"] = voxel2R(area_mm)
     
     # Load model predictions
     model_predictions = []
@@ -186,23 +254,22 @@ def create_visualization(scan_path, label_path, model_dirs, output_path):
     axes[0].imshow(scan_slice_norm, cmap='gray')
     axes[0].set_title("CT Scan", fontsize=14)
     
-    # Mark tumor position and size on scan image
-    for tumor in tumor_info:
-        center = tumor["center"]
-        radius_mm = tumor["radius_mm"]
-        z = int(center[2])
+    # Draw tumor contours and bounding boxes with exact positions
+    for tumor, contour in zip(slice_tumors, tumor_contours):
+        # Draw contour
+        axes[0].plot(contour[:, 1], contour[:, 0], 'r-', linewidth=2)
         
-        # Only mark tumors close to current slice
-        if abs(z - optimal_slice) <= 3:
-            y, x = int(center[0]), int(center[1])
-            size = int(radius_mm * 2 / min(spacing_mm[0], spacing_mm[1]))  # Convert mm to pixel size
-            
-            rect = Rectangle((x - size//2, y - size//2), size, size, 
-                            linewidth=2, edgecolor='r', facecolor='none')
-            axes[0].add_patch(rect)
-            axes[0].text(x - size//2, y - size//2 - 5, 
-                        f"{radius_mm:.1f}mm", color='yellow', fontsize=12, 
-                        fontweight='bold', bbox=dict(facecolor='black', alpha=0.7))
+        # Draw bounding box
+        x_min, y_min, x_max, y_max = tumor["bbox"]
+        rect = Rectangle((x_min, y_min), x_max - x_min, y_max - y_min,
+                         linewidth=2, edgecolor='r', facecolor='none')
+        axes[0].add_patch(rect)
+        
+        # Add size label at top of bounding box
+        radius_mm = tumor["radius_mm"]
+        axes[0].text(x_min, y_min - 5, f"{radius_mm:.1f}mm", 
+                    color='yellow', fontsize=12, fontweight='bold',
+                    bbox=dict(facecolor='black', alpha=0.7))
     
     # 2. Ground truth overlaid on scan
     axes[1].imshow(scan_slice_norm, cmap='gray')
@@ -219,6 +286,11 @@ def create_visualization(scan_path, label_path, model_dirs, output_path):
     
     axes[1].imshow(liver_overlay)
     axes[1].imshow(tumor_overlay)
+    
+    # Draw contours on ground truth image as well
+    for contour in tumor_contours:
+        axes[1].plot(contour[:, 1], contour[:, 0], 'r-', linewidth=1.5)
+    
     axes[1].set_title("Ground Truth", fontsize=14)
     
     # 3+ Model prediction results
@@ -235,6 +307,12 @@ def create_visualization(scan_path, label_path, model_dirs, output_path):
         
         axes[i+2].imshow(pred_liver_overlay)
         axes[i+2].imshow(pred_tumor_overlay)
+        
+        # Also find and plot contours of predicted tumors
+        pred_tumors, pred_contours = find_tumor_contours(pred_tumor, optimal_slice)
+        for contour in pred_contours:
+            axes[i+2].plot(contour[:, 1], contour[:, 0], 'r-', linewidth=1.5)
+        
         axes[i+2].set_title(model_name, fontsize=14)
     
     # Hide axis ticks
