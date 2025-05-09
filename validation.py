@@ -40,6 +40,7 @@ parser.add_argument('--num_classes', default=3, type=int)
 
 parser.add_argument('--model', default='unet', type=str)
 parser.add_argument('--swin_type', default='tiny', type=str)
+parser.add_argument('--analyze_tumor_size', action='store_true', help='Analyze tumor by size')
 
 
 def to_percentage(value):
@@ -48,6 +49,16 @@ def to_percentage(value):
 
 def to_decimal(value):
     return f"{value:.2f}"
+
+
+def voxel2R(A):
+    """将体素体积转换为球体半径（单位：mm）"""
+    return (np.array(A)/4*3/np.pi)**(1/3)
+
+
+def pixel2voxel(A, res):
+    """将像素数量转换为体积（单位：mm³）"""
+    return np.array(A)*(res[0]*res[1]*res[2])
 
 
 def denoise_pred(pred: np.ndarray):
@@ -92,6 +103,73 @@ def cal_dice_nsd(pred, truth, spacing_mm=(1, 1, 1), tolerance=2, percent=95):
     rhd = compute_robust_hausdorff(surface_distances, percent)
     sd = max(compute_average_surface_distance(surface_distances))
     return (dice, nsd, sd, rhd)
+
+
+def analyze_tumor_by_size(pred_tumor, label_tumor, spacing_mm):
+    """
+    分析不同大小肿瘤的检测效果
+    返回每个肿瘤大小类别的TP、FN、FP数量
+    """
+    # 初始化不同大小肿瘤的统计数据
+    size_bins = {'0-5mm': {'tp': 0, 'fn': 0, 'fp': 0}, 
+                 '5-10mm': {'tp': 0, 'fn': 0, 'fp': 0}, 
+                 '>10mm': {'tp': 0, 'fn': 0, 'fp': 0}}
+    
+    # 确保输入数据为布尔类型
+    pred_tumor = pred_tumor.astype(bool)
+    label_tumor = label_tumor.astype(bool)
+    
+    # 处理真实标签中的肿瘤
+    if np.sum(label_tumor) > 0:
+        label_cc, label_num = ndimage.label(label_tumor)
+        for i in range(1, label_num + 1):
+            # 提取单个肿瘤区域
+            tumor_region = (label_cc == i)
+            tumor_size = np.sum(tumor_region)
+            if tumor_size < 8:  # 忽略太小的肿瘤
+                continue
+                
+            # 计算肿瘤半径（mm）
+            tumor_volume_mm = pixel2voxel(tumor_size, spacing_mm)
+            tumor_radius_mm = voxel2R(tumor_volume_mm)
+            
+            # 检查此肿瘤是否被正确检测（与预测结果有足够重叠）
+            overlap = np.sum(np.logical_and(tumor_region, pred_tumor)) / tumor_size
+            detected = overlap > 0.1  # 假设10%的重叠算作检测到
+            
+            # 根据肿瘤半径分类
+            if tumor_radius_mm <= 5:
+                size_bins['0-5mm']['tp' if detected else 'fn'] += 1
+            elif tumor_radius_mm <= 10:
+                size_bins['5-10mm']['tp' if detected else 'fn'] += 1
+            else:
+                size_bins['>10mm']['tp' if detected else 'fn'] += 1
+    
+    # 处理预测结果中的假阳性肿瘤
+    if np.sum(pred_tumor) > 0:
+        pred_cc, pred_num = ndimage.label(pred_tumor)
+        for i in range(1, pred_num + 1):
+            pred_region = (pred_cc == i)
+            pred_size = np.sum(pred_region)
+            if pred_size < 8:
+                continue
+                
+            # 计算预测肿瘤的重叠
+            overlap = np.sum(np.logical_and(pred_region, label_tumor)) / pred_size
+            if overlap <= 0.1:  # 假阳性
+                # 计算肿瘤半径
+                pred_volume_mm = pixel2voxel(pred_size, spacing_mm)
+                pred_radius_mm = voxel2R(pred_volume_mm)
+                
+                # 根据半径分类
+                if pred_radius_mm <= 5:
+                    size_bins['0-5mm']['fp'] += 1
+                elif pred_radius_mm <= 10:
+                    size_bins['5-10mm']['fp'] += 1
+                else:
+                    size_bins['>10mm']['fp'] += 1
+                
+    return size_bins
 
 
 def _get_model(args):
@@ -222,6 +300,11 @@ def main():
               'tumor_rhd']
 
     rows = []
+    
+    # 用于肿瘤大小分析的统计变量
+    tumor_size_stats = {'0-5mm': {'tp': 0, 'fn': 0, 'fp': 0}, 
+                         '5-10mm': {'tp': 0, 'fn': 0, 'fp': 0}, 
+                         '>10mm': {'tp': 0, 'fn': 0, 'fp': 0}}
 
     model.eval()
     start_time = time.time()
@@ -278,6 +361,21 @@ def main():
                                                                        current_liver_rhd, current_tumor_rhd),
                   'time {:.2f}s'.format(time.time() - start_time))
 
+            # 分析不同大小肿瘤的检测效果
+            if args.analyze_tumor_size:
+                size_stats = analyze_tumor_by_size(val_outputs[2, ...], val_labels[2, ...], spacing_mm)
+                # 将该样本的统计结果累加到全局统计
+                for size_bin in size_stats:
+                    for metric in size_stats[size_bin]:
+                        tumor_size_stats[size_bin][metric] += size_stats[size_bin][metric]
+                
+                print(f"Tumor size stats for {name}:")
+                for size_bin in size_stats:
+                    tp = size_stats[size_bin]['tp']
+                    fn = size_stats[size_bin]['fn']
+                    fp = size_stats[size_bin]['fp']
+                    print(f"  {size_bin}: TP={tp}, FN={fn}, FP={fp}")
+
             # save the prediction
             output_dir = os.path.join(args.save_dir, args.model_name, str(args.val_overlap), 'pred')
             if not os.path.exists(output_dir):
@@ -317,6 +415,43 @@ def main():
                 ["tumor sd", np.mean(tumor_sd)],
                 ["tumor rhd", np.mean(tumor_rhd)]
             ]
+            
+        # 输出每个大小肿瘤的检测效果
+        if args.analyze_tumor_size:
+            print("\n=== Tumor Size Analysis ===")
+            for size_bin in tumor_size_stats:
+                tp = tumor_size_stats[size_bin]['tp']
+                fn = tumor_size_stats[size_bin]['fn']
+                fp = tumor_size_stats[size_bin]['fp']
+                
+                # 计算指标
+                sensitivity = tp / (tp + fn) if (tp + fn) > 0 else 0
+                precision = tp / (tp + fp) if (tp + fp) > 0 else 0
+                f1 = 2 * sensitivity * precision / (sensitivity + precision) if (sensitivity + precision) > 0 else 0
+                
+                print(f"\nTumor size {size_bin}:")
+                print(f"  Total: TP={tp}, FN={fn}, FP={fp}")
+                print(f"  Sensitivity: {to_percentage(sensitivity)}%")
+                print(f"  Precision: {to_percentage(precision)}%")
+                print(f"  F1 Score: {to_decimal(f1)}")
+                
+                # 添加到结果列表
+                results.append([f"tumor_{size_bin}_tp", tp])
+                results.append([f"tumor_{size_bin}_fn", fn])
+                results.append([f"tumor_{size_bin}_fp", fp])
+                results.append([f"tumor_{size_bin}_sensitivity", sensitivity])
+                results.append([f"tumor_{size_bin}_precision", precision])
+                results.append([f"tumor_{size_bin}_f1", f1])
+                
+            # 添加表头信息
+            header.extend([
+                'tumor_0-5mm_tp', 'tumor_0-5mm_fn', 'tumor_0-5mm_fp', 
+                'tumor_0-5mm_sensitivity', 'tumor_0-5mm_precision', 'tumor_0-5mm_f1',
+                'tumor_5-10mm_tp', 'tumor_5-10mm_fn', 'tumor_5-10mm_fp', 
+                'tumor_5-10mm_sensitivity', 'tumor_5-10mm_precision', 'tumor_5-10mm_f1',
+                'tumor_>10mm_tp', 'tumor_>10mm_fn', 'tumor_>10mm_fp', 
+                'tumor_>10mm_sensitivity', 'tumor_>10mm_precision', 'tumor_>10mm_f1'
+            ])
 
         # save metrics to cvs file
         csv_save = os.path.join(args.save_dir, args.model_name, str(args.val_overlap))

@@ -7,7 +7,6 @@ MedCraft
 │  main.py
 │  monai_trainer.py // Training script using MONAI framework
 │  transfer_label.py
-│  tumor_analyzer.py // Analyzes tumor data
 │  tumor_saver.py  // Saves tumor data
 │  validation.py // Validation script
 │
