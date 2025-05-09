@@ -8,6 +8,9 @@ import matplotlib.colors as mcolors
 from scipy import ndimage
 import glob
 from skimage import measure
+import json
+from tqdm import tqdm
+import concurrent.futures
 
 def voxel2R(A):
     """Convert voxel volume to sphere radius (unit: mm)"""
@@ -159,11 +162,19 @@ def find_tumor_contours(tumor_mask, z_slice):
     
     return tumors, contours
 
-def create_visualization(scan_path, label_path, model_dirs, output_path):
+def create_visualization(scan_path, label_path, model_dirs, output_path, case_name=None, verbose=False):
     """Create visualization of tumor segmentation"""
+    # Extract case name from file path if not provided
+    if case_name is None:
+        case_name = os.path.basename(scan_path).split('.')[0]
+        
     # Load scan and label
-    scan_nib = nib.load(scan_path)
-    label_nib = nib.load(label_path)
+    try:
+        scan_nib = nib.load(scan_path)
+        label_nib = nib.load(label_path)
+    except Exception as e:
+        print(f"Error loading {case_name}: {str(e)}")
+        return False
     
     scan_data = scan_nib.get_fdata()
     label_data = label_nib.get_fdata()
@@ -180,17 +191,26 @@ def create_visualization(scan_path, label_path, model_dirs, output_path):
     tumor_mask = np.zeros_like(label_data)
     tumor_mask[label_data == 2] = 1
     
+    # Check if there are tumors in the label
+    if np.sum(tumor_mask) == 0:
+        print(f"No tumors found in {case_name}, skipping visualization")
+        return False
+    
     # Analyze tumor information for entire volume
     tumor_info = analyze_tumors(tumor_mask, spacing_mm)
     
     # Get liver region bounding box
-    x_range, y_range, z_range = get_liver_bbox(liver_mask)
+    try:
+        x_range, y_range, z_range = get_liver_bbox(liver_mask)
+    except IndexError:
+        print(f"No liver found in {case_name}, skipping visualization")
+        return False
     
     # Find optimal slice
     optimal_slice = find_optimal_slice(tumor_mask, liver_mask)
     if optimal_slice is None:
-        print("Could not find a suitable slice!")
-        return
+        print(f"Could not find a suitable slice in {case_name}!")
+        return False
     
     # Ensure slice is within liver range
     optimal_slice = max(z_range[0], min(optimal_slice, z_range[1]))
@@ -205,8 +225,18 @@ def create_visualization(scan_path, label_path, model_dirs, output_path):
     
     # Load model predictions
     model_predictions = []
-    model_names = ["Model trained on real tumors", "SynTumor", "MedCraft"]
+    model_names = []
+    
+    # Define default model names that will be used if we have exactly 3 models
+    default_model_names = ["Model trained on real tumors", "SynTumor", "MedCraft"]
+    
+    if verbose:
+        print(f"Attempting to load predictions for {case_name} from {len(model_dirs)} model directories")
+    
     for i, model_dir in enumerate(model_dirs):
+        if verbose:
+            print(f"Processing model directory {i+1}: {model_dir}")
+            
         # Find prediction files
         pred_files = glob.glob(os.path.join(model_dir, "*.nii.gz"))
         if not pred_files:
@@ -217,13 +247,32 @@ def create_visualization(scan_path, label_path, model_dirs, output_path):
         scan_name = os.path.basename(scan_path).split('.')[0]
         matching_files = [f for f in pred_files if scan_name in os.path.basename(f)]
         
+        pred_path = None
         if matching_files:
             pred_path = matching_files[0]
+            if verbose:
+                print(f"Found matching prediction file: {pred_path}")
         else:
-            pred_path = pred_files[0]  # If no match, use the first one
+            # If no match found, try alternatives
+            print(f"No exact match for {scan_name} in {model_dir}, trying to find a similar file")
+            # Try to match the pattern without extension
+            for pred_file in pred_files:
+                if os.path.basename(pred_file).startswith(scan_name):
+                    pred_path = pred_file
+                    if verbose:
+                        print(f"Found similar prediction file: {pred_path}")
+                    break
             
-        pred_nib = nib.load(pred_path)
-        pred_data = pred_nib.get_fdata()
+        if pred_path is None:
+            print(f"No suitable prediction file found for {scan_name} in {model_dir}")
+            continue
+            
+        try:
+            pred_nib = nib.load(pred_path)
+            pred_data = pred_nib.get_fdata()
+        except Exception as e:
+            print(f"Error loading prediction file {pred_path}: {str(e)}")
+            continue
         
         # If prediction is class labels, convert to liver and tumor masks
         if len(pred_data.shape) == 3 and pred_data.dtype != bool:
@@ -235,13 +284,46 @@ def create_visualization(scan_path, label_path, model_dirs, output_path):
             pred_tumor_mask[pred_data == 2] = 1
             
             model_predictions.append((pred_liver_mask, pred_tumor_mask))
+            
+            # Add model name
+            if i < len(default_model_names):
+                model_names.append(default_model_names[i])
+            else:
+                model_names.append(f"Model {i+1}")
+                
+            if verbose:
+                print(f"Successfully loaded model {i+1}: {model_names[-1]}")
         else:
             # If prediction is already in mask form
             model_predictions.append((pred_data, pred_data))
+            
+            # Add model name
+            if i < len(default_model_names):
+                model_names.append(default_model_names[i])
+            else:
+                model_names.append(f"Model {i+1}")
+                
+            if verbose:
+                print(f"Successfully loaded model {i+1}: {model_names[-1]}")
+    
+    if verbose:
+        print(f"Total models loaded: {len(model_predictions)}")
+        print(f"Model names: {model_names}")
     
     # Create visualization
     num_models = len(model_predictions)
+    
+    if num_models == 0:
+        print(f"No model predictions could be loaded for {case_name}")
+        return False
+    
     fig, axes = plt.subplots(1, num_models + 2, figsize=(5 * (num_models + 2), 5))
+    
+    # Handle the case when only one image is to be generated
+    if num_models + 2 == 1:
+        axes = [axes]
+    elif not isinstance(axes, np.ndarray):
+        axes = np.array([axes])
     
     # 1. Original scan image
     scan_slice = scan_data[:, :, optimal_slice].T
@@ -327,21 +409,124 @@ def create_visualization(scan_path, label_path, model_dirs, output_path):
     plt.close()
     
     print(f"Visualization saved to: {output_path}")
+    return True
+
+def process_batch_from_json(json_file, data_dir, model_dirs, output_dir, limit=None, verbose=False):
+    """Process multiple cases from a JSON file"""
+    # Load JSON file
+    with open(json_file, 'r') as f:
+        data = json.load(f)
+    
+    # Check if validation data exists
+    if 'validation' not in data:
+        print(f"No validation data found in {json_file}")
+        return
+    
+    # Create output directory
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Get validation cases
+    validation_cases = data['validation']
+    if limit:
+        validation_cases = validation_cases[:limit]
+    
+    print(f"Processing {len(validation_cases)} cases from {json_file}")
+    
+    # Verify model directories
+    if verbose:
+        print(f"Model directories to be used:")
+        for i, model_dir in enumerate(model_dirs):
+            print(f"  Model {i+1}: {model_dir}")
+            if not os.path.exists(model_dir):
+                print(f"    Warning: Directory does not exist!")
+            else:
+                pred_files = glob.glob(os.path.join(model_dir, "*.nii.gz"))
+                print(f"    Found {len(pred_files)} prediction files")
+    
+    # Track successful and failed cases
+    successful = []
+    failed = []
+    
+    # Process each case
+    for i, case in enumerate(tqdm(validation_cases, desc="Processing cases")):
+        # Get image and label paths
+        image_path = os.path.join(data_dir, case['image'])
+        label_path = os.path.join(data_dir, case['label'])
+        
+        # Get case name
+        case_name = os.path.basename(image_path).split('.')[0]
+        
+        # Create output path for this case
+        case_output_path = os.path.join(output_dir, f"{case_name}.png")
+        
+        # Process case
+        try:
+            result = create_visualization(image_path, label_path, model_dirs, case_output_path, case_name, verbose)
+            if result:
+                successful.append(case_name)
+            else:
+                failed.append(case_name)
+        except Exception as e:
+            print(f"Error processing case {case_name}: {str(e)}")
+            failed.append(case_name)
+    
+    # Write summary
+    summary_path = os.path.join(output_dir, "summary.txt")
+    with open(summary_path, 'w') as f:
+        f.write(f"Total cases: {len(validation_cases)}\n")
+        f.write(f"Successfully processed: {len(successful)}\n")
+        f.write(f"Failed: {len(failed)}\n\n")
+        
+        f.write("Successfully processed cases:\n")
+        for case in successful:
+            f.write(f"- {case}\n")
+        
+        f.write("\nFailed cases:\n")
+        for case in failed:
+            f.write(f"- {case}\n")
+    
+    print(f"Batch processing complete. Successfully processed {len(successful)} out of {len(validation_cases)} cases.")
+    print(f"Summary saved to: {summary_path}")
 
 def main():
     parser = argparse.ArgumentParser(description='Tumor Segmentation Visualization Tool')
-    parser.add_argument('--scan_path', type=str, required=True, help='Path to scan image')
-    parser.add_argument('--label_path', type=str, required=True, help='Path to ground truth label')
+    parser.add_argument('--scan_path', type=str, help='Path to scan image (for single case)')
+    parser.add_argument('--label_path', type=str, help='Path to ground truth label (for single case)')
     parser.add_argument('--model_dirs', type=str, nargs='+', help='Directories of model prediction results')
-    parser.add_argument('--output_path', type=str, default='visualization.png', help='Output image path')
+    parser.add_argument('--output_path', type=str, default='visualization.png', help='Output image path (for single case)')
+    
+    # Add batch processing arguments
+    parser.add_argument('--json_file', type=str, help='JSON file containing validation dataset info')
+    parser.add_argument('--data_dir', type=str, help='Base directory for dataset paths in JSON file')
+    parser.add_argument('--output_dir', type=str, default='batch_results', help='Output directory for batch results')
+    parser.add_argument('--limit', type=int, help='Limit the number of cases to process')
+    parser.add_argument('--verbose', action='store_true', help='Print verbose output for debugging')
     
     args = parser.parse_args()
     
-    if args.model_dirs and len(args.model_dirs) > 3:
-        print("Warning: Maximum 3 model directories supported, using only the first 3.")
-        args.model_dirs = args.model_dirs[:3]
+    # Check if model directories exist
+    if args.model_dirs:
+        args.model_dirs = [d for d in args.model_dirs if os.path.exists(d) or print(f"Warning: Directory {d} does not exist!")]
+        if len(args.model_dirs) > 3:
+            print("Warning: Maximum 3 model directories supported, using only the first 3.")
+            args.model_dirs = args.model_dirs[:3]
+        
+        if args.verbose:
+            print(f"Using model directories: {args.model_dirs}")
+    else:
+        args.model_dirs = []
     
-    create_visualization(args.scan_path, args.label_path, args.model_dirs or [], args.output_path)
+    # Check if we should do batch processing
+    if args.json_file and args.data_dir:
+        process_batch_from_json(args.json_file, args.data_dir, args.model_dirs, args.output_dir, args.limit, args.verbose)
+    
+    # Otherwise do single case processing
+    elif args.scan_path and args.label_path:
+        create_visualization(args.scan_path, args.label_path, args.model_dirs, args.output_path, verbose=args.verbose)
+    
+    else:
+        print("Error: Either provide --scan_path and --label_path for single case, "
+              "or --json_file and --data_dir for batch processing")
 
 if __name__ == "__main__":
     main()
