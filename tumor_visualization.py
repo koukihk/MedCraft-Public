@@ -228,7 +228,7 @@ def create_visualization(scan_path, label_path, model_dirs, output_path, case_na
     model_names = []
     
     # Define default model names that will be used if we have exactly 3 models
-    default_model_names = ["Model trained on real tumors", "SynTumor", "MedCraft"]
+    default_model_names = ["Model trained on real tumors", "SynTumor", "MedCraft(Ours)"]
     
     if verbose:
         print(f"Attempting to load predictions for {case_name} from {len(model_dirs)} model directories")
@@ -334,7 +334,7 @@ def create_visualization(scan_path, label_path, model_dirs, output_path, case_na
     scan_slice_norm = (scan_slice_norm - scan_min) / (scan_max - scan_min)
     
     axes[0].imshow(scan_slice_norm, cmap='gray')
-    axes[0].set_title("CT Scan", fontsize=14)
+    axes[0].set_title("CT Scan", fontsize=25)
     
     # Draw tumor contours and bounding boxes with exact positions
     for tumor, contour in zip(slice_tumors, tumor_contours):
@@ -349,7 +349,7 @@ def create_visualization(scan_path, label_path, model_dirs, output_path, case_na
         
         # Add size label at top of bounding box
         radius_mm = tumor["radius_mm"]
-        axes[0].text(x_min, y_min - 5, f"{radius_mm:.1f}mm", 
+        axes[0].text(x_max + 7, y_max + 3, f"{radius_mm:.1f}mm", 
                     color='yellow', fontsize=12, fontweight='bold',
                     bbox=dict(facecolor='black', alpha=0.7))
     
@@ -373,7 +373,7 @@ def create_visualization(scan_path, label_path, model_dirs, output_path, case_na
     for contour in tumor_contours:
         axes[1].plot(contour[:, 1], contour[:, 0], 'r-', linewidth=1.5)
     
-    axes[1].set_title("Ground Truth", fontsize=14)
+    axes[1].set_title("Ground Truth", fontsize=25)
     
     # 3+ Model prediction results
     for i, ((pred_liver, pred_tumor), model_name) in enumerate(zip(model_predictions, model_names)):
@@ -395,7 +395,7 @@ def create_visualization(scan_path, label_path, model_dirs, output_path, case_na
         for contour in pred_contours:
             axes[i+2].plot(contour[:, 1], contour[:, 0], 'r-', linewidth=1.5)
         
-        axes[i+2].set_title(model_name, fontsize=14)
+        axes[i+2].set_title(model_name, fontsize=25)
     
     # Hide axis ticks
     for ax in axes:
@@ -405,6 +405,9 @@ def create_visualization(scan_path, label_path, model_dirs, output_path, case_na
     
     # Save image
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    # Ensure the file extension is .png
+    if not output_path.lower().endswith('.png'):
+        output_path = os.path.splitext(output_path)[0] + '.png'
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
     plt.close()
     

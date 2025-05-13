@@ -4,17 +4,7 @@ from tumor_analyzer import EllipsoidFitter
 
 
 def sample_within_ellipsoid(ellipsoid_model, num_samples=1, random_state=None):
-    """
-    从椭球体内部均匀采样点
-    
-    参数:
-        ellipsoid_model: EllipsoidFitter实例
-        num_samples: 需要采样的点数量
-        random_state: 随机数种子
-    
-    返回:
-        采样的点坐标数组 shape=(num_samples, 3)
-    """
+
     if random_state is not None:
         np.random.seed(random_state)
     
@@ -47,18 +37,7 @@ def sample_within_ellipsoid(ellipsoid_model, num_samples=1, random_state=None):
 
 
 def get_absolute_coordinate(relative_coordinate, original_shape, target_volume, start):
-    """
-    将相对坐标转换为绝对坐标
-    
-    参数:
-        relative_coordinate: 相对坐标
-        original_shape: 原始体积形状
-        target_volume: 目标体积形状
-        start: 裁剪起始点
-        
-    返回:
-        绝对坐标
-    """
+
     x_ratio = original_shape[0] / target_volume[0]
     y_ratio = original_shape[1] / target_volume[1]
     z_ratio = original_shape[2] / target_volume[2]
@@ -76,21 +55,7 @@ def get_absolute_coordinate(relative_coordinate, original_shape, target_volume, 
 
 def is_edge_point(mask, point, edge_op="erosion", neighborhood_size=(3, 3, 3), volume_threshold=5,
                  sobel_threshold=400, erosion_kernel_size=5):
-    """
-    判断点是否在边缘
-    
-    参数:
-        mask: 3D掩码数组
-        point: 点坐标
-        edge_op: 边缘检测方法，可选值包括：'erosion', 'volume', 'sobel', 'any', 'both', 'volume_erosion', 'sobel_erosion', 'all', 'none'
-        neighborhood_size: 检查体积时的邻域大小
-        volume_threshold: 体积阈值
-        sobel_threshold: 梯度阈值
-        erosion_kernel_size: 腐蚀核大小
-        
-    返回:
-        是否为边缘点
-    """
+
     from scipy import ndimage
     import cv2
     
@@ -195,18 +160,7 @@ def is_edge_point(mask, point, edge_op="erosion", neighborhood_size=(3, 3, 3), v
 
 
 def is_within_middle_z_range(point, z_start, z_end, margin_ratio=0.2):
-    """
-    判断点是否在z轴的中间区域
-    
-    参数:
-        point: 点坐标
-        z_start: z轴起始位置
-        z_end: z轴结束位置
-        margin_ratio: 边缘比例
-        
-    返回:
-        是否在中间区域
-    """
+
     z = point[2]
     z_range = z_end - z_start
     z_margin = z_range * margin_ratio
@@ -216,20 +170,7 @@ def is_within_middle_z_range(point, z_start, z_end, margin_ratio=0.2):
 
 def optimized_ellipsoid_select(mask_scan, ellipsoid_model, max_attempts=1000, edge_op="erosion", 
                               middle_z_only=False, random_state=None):
-    """
-    基于优化椭球体模型选择肿瘤点位置
-    
-    参数:
-        mask_scan: 3D掩码数组
-        ellipsoid_model: 椭球体模型
-        max_attempts: 最大尝试次数
-        edge_op: 边缘检测方法
-        middle_z_only: 是否只在z轴中间区域选择
-        random_state: 随机数种子
-        
-    返回:
-        选择的点坐标
-    """
+
     if random_state is not None:
         np.random.seed(random_state)
     
@@ -286,16 +227,7 @@ def optimized_ellipsoid_select(mask_scan, ellipsoid_model, max_attempts=1000, ed
 
 
 def random_select(mask_scan, max_attempts=500):
-    """
-    随机选择肿瘤点位置（备用方法）
-    
-    参数:
-        mask_scan: 3D掩码数组
-        max_attempts: 最大尝试次数
-        
-    返回:
-        选择的点坐标
-    """
+
     # 找到所有值为1的点
     points = np.argwhere(mask_scan == 1)
     
@@ -318,13 +250,7 @@ def random_select(mask_scan, max_attempts=500):
 
 
 def demo_sampling(ellipsoid_model, n_samples=10):
-    """
-    演示椭球体采样
-    
-    参数:
-        ellipsoid_model: 椭球体模型
-        n_samples: 采样点数量
-    """
+
     import matplotlib.pyplot as plt
     from mpl_toolkits.mplot3d import Axes3D
     
