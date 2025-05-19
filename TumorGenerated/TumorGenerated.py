@@ -16,6 +16,7 @@ class TumorGenerated(RandomizableTransform, MapTransform):
                  tumor_prob=[0.2, 0.2, 0.2, 0.2, 0.2],
                  ellipsoid_model=None,
                  allow_missing_keys: bool = False,
+                 use_enhanced_method: bool = False,
                  ) -> None:
         MapTransform.__init__(self, keys, allow_missing_keys)
         RandomizableTransform.__init__(self, prob)
@@ -23,6 +24,7 @@ class TumorGenerated(RandomizableTransform, MapTransform):
         np.random.seed(0)
         self.ellipsoid_model = ellipsoid_model
         self.edge_advanced_blur = False
+        self.use_enhanced_method = use_enhanced_method
 
         self.tumor_types = ['tiny', 'small', 'medium', 'large', 'mix']
 
@@ -48,6 +50,7 @@ class TumorGenerated(RandomizableTransform, MapTransform):
             tumor_type = np.random.choice(self.tumor_types, p=self.tumor_prob.ravel())
             texture = random.choice(self.textures)
             d['image'][0], d['label'][0] = SynthesisTumor(d['image'][0], d['label'][0], tumor_type, texture,
-                                                          self.edge_advanced_blur, self.ellipsoid_model)
+                                                          self.edge_advanced_blur, self.ellipsoid_model,
+                                                          self.use_enhanced_method)
 
         return d

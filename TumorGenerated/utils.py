@@ -496,53 +496,60 @@ def get_fixed_geo(mask_scan, tumor_type, ellipsoid_model=None):
 
     return geo_mask
 
+def get_tumor(volume_scan, mask_scan, tumor_type, texture, edge_advanced_blur=False):
+    geo_mask = get_fixed_geo(mask_scan, tumor_type)
+
+    sigma = np.random.uniform(1, 2)
+    if edge_advanced_blur:
+        sigma = np.random.uniform(1.0, 2.1)
+    difference = np.random.uniform(65, 145)
+
+    # blur the boundary
+    geo_blur = gaussian_filter(geo_mask*1.0, sigma)
+    abnormally = (volume_scan - texture * geo_blur * difference) * mask_scan
+    # abnormally = (volume_scan - texture * geo_mask * difference) * mask_scan
+    
+    abnormally_full = volume_scan * (1 - mask_scan) + abnormally
+    abnormally_mask = mask_scan + geo_mask
+
+    return abnormally_full, abnormally_mask
 
 def get_tumor_enhanced(volume_scan, mask_scan, tumor_type, texture, edge_advanced_blur=False):
     geo_mask = get_fixed_geo(mask_scan, tumor_type)
     
-    # 1.量化肝脏密度
     organ_hu_lowerbound = 100
     outrange_standard_val = 160
     interval = (outrange_standard_val - organ_hu_lowerbound) / 3
     
-    # 找出血管和高密度组织
     density_map = volume_scan.copy()
     vessel_condition = volume_scan >= outrange_standard_val
     high_tissue_condition = (volume_scan >= (organ_hu_lowerbound + 2 * interval)) & (volume_scan < outrange_standard_val)
     
-    # 2.生成和处理肿瘤
     sigma = np.random.uniform(1, 2)
     if edge_advanced_blur:
         sigma = np.random.uniform(1.0, 2.2)
     difference = np.random.uniform(65, 145)
     
-    # 添加死亡细胞特性（可选）
     death_cells = np.zeros_like(geo_mask)
     if tumor_type == 'large' or tumor_type == 'medium':
-        # 为大中型肿瘤添加坏死区域
         death_prob = 0.7 if tumor_type == 'large' else 0.3
         if np.random.rand() < death_prob:
-            # 在肿瘤中心区域创建坏死
             from scipy import ndimage
             eroded_mask = ndimage.binary_erosion(geo_mask, iterations=3)
             death_cells[eroded_mask] = 1
     
-    # 基本肿瘤生成
     geo_blur = gaussian_filter(geo_mask*1.0, sigma)
     abnormally = (volume_scan - texture * geo_blur * difference) * mask_scan
     
-    # 3.处理血管和高密度组织冲突
     conflict_vessel = vessel_condition & (geo_blur > 0.2)
     conflict_high = high_tissue_condition & (geo_blur > 0.2)
     
-    # 调整冲突区域的值
     if np.any(conflict_vessel):
         abnormally[conflict_vessel] = volume_scan[conflict_vessel] * ((organ_hu_lowerbound + interval/2) / outrange_standard_val)
     
     if np.any(conflict_high):
         abnormally[conflict_high] = volume_scan[conflict_high] * ((organ_hu_lowerbound + 2 * interval) / outrange_standard_val)
     
-    # 4.添加死亡细胞特性（如果有）
     if np.any(death_cells):
         death_difference = np.random.uniform(90, 110)
         death_region = death_cells * texture * death_difference
@@ -554,7 +561,7 @@ def get_tumor_enhanced(volume_scan, mask_scan, tumor_type, texture, edge_advance
     return abnormally_full, abnormally_mask
 
 
-def SynthesisTumor(volume_scan, mask_scan, tumor_type, texture, edge_advanced_blur, ellipsoid_model=None):
+def SynthesisTumor(volume_scan, mask_scan, tumor_type, texture, edge_advanced_blur, ellipsoid_model=None, use_enhanced_method=False):
     # for speed_generate_tumor, we only send the liver part into the generate program
     x_start, x_end = np.where(np.any(mask_scan, axis=(1, 2)))[0][[0, -1]]
     y_start, y_end = np.where(np.any(mask_scan, axis=(0, 2)))[0][[0, -1]]
@@ -578,8 +585,13 @@ def SynthesisTumor(volume_scan, mask_scan, tumor_type, texture, edge_advanced_bl
     start_z = random.randint(0, texture.shape[2] - z_length - 1)
     cut_texture = texture[start_x:start_x + x_length, start_y:start_y + y_length, start_z:start_z + z_length]
 
-    liver_volume, liver_mask = get_tumor_enhanced(liver_volume, liver_mask, tumor_type, cut_texture,
-                                         edge_advanced_blur)
+    if use_enhanced_method:
+        liver_volume, liver_mask = get_tumor_enhanced(liver_volume, liver_mask, tumor_type, cut_texture,
+                                             edge_advanced_blur)
+    else:
+        liver_volume, liver_mask = get_tumor(liver_volume, liver_mask, tumor_type, cut_texture,
+                                             edge_advanced_blur)
+
     volume_scan[x_start:x_end, y_start:y_end, z_start:z_end] = liver_volume
     mask_scan[x_start:x_end, y_start:y_end, z_start:z_end] = liver_mask
 
