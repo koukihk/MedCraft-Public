@@ -25,18 +25,13 @@ class TumorSaver:
 
         if os.path.exists(full_path):
             counter = 1
-            filename, _ = os.path.splitext(filename)
-            filename, _ = os.path.splitext(filename)
-            final_filename = f"{filename}_{counter}"
-            final_filename += '.nii.gz'
+            # Robustly handle filename conflicts
+            base_name = filename.split('.')[0]
+            final_filename = f"{base_name}_{counter}.nii.gz"
             while os.path.exists(os.path.join(output_path, final_filename)):
                 counter += 1
-                final_filename = f"{filename}_{counter}"
-                final_filename += '.nii.gz'
-
-            filename = f"{filename}_{counter}"
-            filename += '.nii.gz'
-            full_path = os.path.join(output_path, filename)
+                final_filename = f"{base_name}_{counter}.nii.gz"
+            full_path = os.path.join(output_path, final_filename)
 
         nib.save(
             nib.Nifti1Image(data.astype(data_type), affine_matrix),
@@ -47,19 +42,19 @@ class TumorSaver:
     @staticmethod
     def save_data(d, folder='default'):
         image_data_type = TumorSaver.get_datatype(d['image_meta_dict']['datatype'])
-        image_affine_matrix = d['image_meta_dict']['original_affine'][0]
+        image_affine_matrix = d['image_meta_dict']['original_affine']
 
         label_data_type = TumorSaver.get_datatype(d['label_meta_dict']['datatype'])
-        label_affine_matrix = d['label_meta_dict']['original_affine'][0]
+        label_affine_matrix = d['label_meta_dict']['original_affine']
 
-        image = d['image'][0].squeeze(0).cpu().numpy()
-        label = d['label'][0].squeeze(0).cpu().numpy()
+        image = d['image'].squeeze(0)
+        label = d['label'].squeeze(0)
 
         image_outputs = os.path.join('synt', folder, 'image')
         label_outputs = os.path.join('synt', folder, 'label')
 
-        image_filename = os.path.basename(d['image_meta_dict']['filename_or_obj'][0])
-        label_filename = os.path.basename(d['label_meta_dict']['filename_or_obj'][0])
+        image_filename = os.path.basename(d['image_meta_dict']['filename_or_obj'])
+        label_filename = os.path.basename(d['label_meta_dict']['filename_or_obj'])
 
         TumorSaver.save_nifti(image, image_affine_matrix, image_data_type, image_outputs, image_filename)
         TumorSaver.save_nifti(label, label_affine_matrix, label_data_type, label_outputs, label_filename)

@@ -24,8 +24,21 @@ warnings.filterwarnings("ignore")
 
 ## Online Tumor Generation
 from TumorGenerated import TumorGenerated, TumorFilter, AddValidKeyd
+from tumor_saver import TumorSaver
 
 import argparse
+
+class SaveSyntheticallyGeneratedData(transforms.Transform):
+    """
+    Custom transform to save synthetically generated data using TumorSaver.
+    """
+    def __init__(self, folder='generated_data'):
+        self.folder = folder
+
+    def __call__(self, data):
+        d = dict(data)
+        TumorSaver.save_data(d, folder=self.folder)
+        return data
 
 parser = argparse.ArgumentParser(description='brats21 segmentation testing')
 
@@ -41,6 +54,7 @@ parser.add_argument('--mixup', action='store_true', help='Enable mixup augmentat
 parser.add_argument('--mixup_alpha', type=float, default=1.0, help='Alpha parameter for mixup')
 parser.add_argument('--mixup_prob', type=float, default=0.5, help='Probability of applying mixup')
 parser.add_argument('--ellipsoid', action='store_true')
+parser.add_argument('--save_syn_data', action='store_true', help='Save synthetically generated data.')
 parser.add_argument('--checkpoint', default=None)
 parser.add_argument('--logdir', default=None)
 parser.add_argument('--save_checkpoint', action='store_true')
@@ -241,42 +255,46 @@ def optuna_run(args):
 
 def _get_transform(args, ellipsoid_model=None, filter_model=None, filter_inferer=None):
     if args.syn:
-        train_transform = transforms.Compose(
-            [
-                transforms.LoadImaged(keys=["image", "label"]),
-                transforms.AddChanneld(keys=["image", "label"]),
-                transforms.Orientationd(keys=["image", "label"], axcodes="RAS"),
-                transforms.Spacingd(keys=["image", "label"], pixdim=(1.0, 1.0, 1.0),
-                                    mode=("bilinear", "nearest")),
-                TumorGenerated(keys=["image", "label"], prob=0.9, ellipsoid_model=ellipsoid_model),
-                # AddValidKeyd(keys=["image", "label"]),
-                # TumorFilter(keys=["image", "label"], prob=0.8, rank=args.rank, filter=filter_model, filter_inferer=filter_inferer,
-                #              use_inferer=True, threshold=0.5),
-                transforms.ScaleIntensityRanged(
-                    keys=["image"], a_min=-21, a_max=189,
-                    b_min=0.0, b_max=1.0, clip=True,
-                ),
-                transforms.SpatialPadd(keys=["image", "label"], mode=["minimum", "constant"],
-                                       spatial_size=[96, 96, 96]),
-                transforms.RandCropByPosNegLabeld(
-                    keys=["image", "label"],
-                    label_key="label",
-                    spatial_size=(96, 96, 96),
-                    pos=1,
-                    neg=1,
-                    num_samples=1,
-                    image_key="image",
-                    image_threshold=0,
-                ),
-                transforms.RandFlipd(keys=["image", "label"], prob=0.2, spatial_axis=0),
-                transforms.RandFlipd(keys=["image", "label"], prob=0.2, spatial_axis=1),
-                transforms.RandFlipd(keys=["image", "label"], prob=0.2, spatial_axis=2),
-                transforms.RandRotate90d(keys=["image", "label"], prob=0.2, max_k=3),
-                transforms.RandScaleIntensityd(keys="image", factors=0.1, prob=0.15),
-                transforms.RandShiftIntensityd(keys="image", offsets=0.1, prob=0.15),
-                transforms.ToTensord(keys=["image", "label"]),
-            ]
-        )
+        train_transform_list = [
+            transforms.LoadImaged(keys=["image", "label"]),
+            transforms.AddChanneld(keys=["image", "label"]),
+            transforms.Orientationd(keys=["image", "label"], axcodes="RAS"),
+            transforms.Spacingd(keys=["image", "label"], pixdim=(1.0, 1.0, 1.0),
+                                mode=("bilinear", "nearest")),
+            TumorGenerated(keys=["image", "label"], prob=0.9, ellipsoid_model=ellipsoid_model),
+        ]
+        if args.save_syn_data:
+            train_transform_list.append(SaveSyntheticallyGeneratedData(folder='syn_run'))
+
+        train_transform_list.extend([
+            # AddValidKeyd(keys=["image", "label"]),
+            # TumorFilter(keys=["image", "label"], prob=0.8, rank=args.rank, filter=filter_model, filter_inferer=filter_inferer,
+            #              use_inferer=True, threshold=0.5),
+            transforms.ScaleIntensityRanged(
+                keys=["image"], a_min=-21, a_max=189,
+                b_min=0.0, b_max=1.0, clip=True,
+            ),
+            transforms.SpatialPadd(keys=["image", "label"], mode=["minimum", "constant"],
+                                   spatial_size=[96, 96, 96]),
+            transforms.RandCropByPosNegLabeld(
+                keys=["image", "label"],
+                label_key="label",
+                spatial_size=(96, 96, 96),
+                pos=1,
+                neg=1,
+                num_samples=1,
+                image_key="image",
+                image_threshold=0,
+            ),
+            transforms.RandFlipd(keys=["image", "label"], prob=0.2, spatial_axis=0),
+            transforms.RandFlipd(keys=["image", "label"], prob=0.2, spatial_axis=1),
+            transforms.RandFlipd(keys=["image", "label"], prob=0.2, spatial_axis=2),
+            transforms.RandRotate90d(keys=["image", "label"], prob=0.2, max_k=3),
+            transforms.RandScaleIntensityd(keys="image", factors=0.1, prob=0.15),
+            transforms.RandShiftIntensityd(keys="image", offsets=0.1, prob=0.15),
+            transforms.ToTensord(keys=["image", "label"]),
+        ])
+        train_transform = transforms.Compose(train_transform_list)
 
     else:
         train_transform = transforms.Compose(
