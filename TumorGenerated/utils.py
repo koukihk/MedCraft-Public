@@ -36,7 +36,7 @@ def get_predefined_texture(mask_shape, sigma_a, sigma_b):
     u_0 = np.random.uniform(0.5, 0.55)
     threshold_mask = b > 0.12  # this is for calculte the mean_0.2(b2)
     beta = u_0 / (np.sum(b * threshold_mask) / threshold_mask.sum())
-    Bj = np.clip(beta * b, 0, 1)  
+    Bj = np.clip(beta * b, 0, 1)  # 目前是0-1区间
 
     return Bj
 
@@ -50,11 +50,11 @@ def get_predefined_texture_b(mask_shape, sigma_a, sigma_b):
     a_denoised = denoise_tv_chambolle(a, weight=0.1, multichannel=False)
 
     # Step 3: Wavelet transform
-    coeffs = pywt.wavedecn(a_denoised, wavelet='db4', level=2)  
+    coeffs = pywt.wavedecn(a_denoised, wavelet='db4', level=2)  # 使用3D小波分解
     coeffs[1] = {k: 0.3 * v for k, v in coeffs[1].items()}
     for i in range(2, len(coeffs)):
         coeffs[i] = {k: np.zeros_like(v) for k, v in coeffs[i].items()}
-    a_wavelet_denoised = pywt.waverecn(coeffs, wavelet='db4') 
+    a_wavelet_denoised = pywt.waverecn(coeffs, wavelet='db4')  # 3D小波重构
 
     # Normalize to 0-1
     a_wavelet_denoised = (a_wavelet_denoised - np.min(a_wavelet_denoised)) / (
@@ -77,7 +77,7 @@ def get_predefined_texture_b(mask_shape, sigma_a, sigma_b):
     u_0 = np.random.uniform(0.5, 0.55)
     threshold_mask = b > 0.12  # this is for calculte the mean_0.2(b2)
     beta = u_0 / (np.sum(b * threshold_mask) / threshold_mask.sum())
-    Bj = np.clip(beta * b, 0, 1)  
+    Bj = np.clip(beta * b, 0, 1)  # 目前是0-1区间
 
     return Bj
 

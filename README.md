@@ -63,6 +63,8 @@ Please download these datasets and save to `<data-path>` (user-defined).
 - 03 [Combined Healthy Abdominal Organ Segmentation (CHAOS)](https://chaos.grand-challenge.org/)
 - 04 [Liver Tumor Segmentation Challenge (LiTS)](https://competitions.codalab.org/competitions/17094)
 
+If you want to verify the generalization capability of MedCraft on a larger dataset, you also need to download the corresponding dataset, such as [AbdomenAtlas1.0Mini](https://huggingface.co/datasets/AbdomenAtlas/_AbdomenAtlas1.0Mini), or your private dataset.
+
 ```bash
 wget https://www.modelscope.cn/datasets/koukihk/MedCraft/resolve/master/CT.zip # from ModelScope
 wget https://www.modelscope.cn/datasets/koukihk/MedCraft/resolve/master/Task03_Liver.zip # from ModelScope
