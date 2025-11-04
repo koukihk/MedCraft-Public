@@ -1,6 +1,8 @@
 import os
+import json
 import warnings
 from functools import partial
+from pathlib import Path
 
 import nibabel as nb
 import numpy as np
@@ -19,6 +21,11 @@ from monai_trainer import AMDistributedSampler, run_training
 from networks.swin3d_unetrv2 import SwinUNETR as SwinUNETR_v2
 from optimizers.lr_scheduler import LinearWarmupCosineAnnealingLR
 from tumor_analyzer import EllipsoidFitter
+
+try:
+    import yaml  # type: ignore
+except ImportError:  # pragma: no cover
+    yaml = None
 
 warnings.filterwarnings("ignore")
 
@@ -145,6 +152,35 @@ parser.add_argument('--json_dir', default=None, type=str)
 parser.add_argument('--cache_num', default=500, type=int)
 
 parser.add_argument('--use_pretrained', action='store_true')
+parser.add_argument('--hparam_cfg', default=None, type=str)
+parser.add_argument('--hparam_profile', default=None, type=str)
+
+
+def _load_hparam_profile(cfg_path, profile_name):
+    if cfg_path is None or profile_name is None:
+        return {}
+
+    path = Path(cfg_path)
+    if not path.exists():
+        raise FileNotFoundError(f'hparam config not found: {cfg_path}')
+
+    suffix = path.suffix.lower()
+    with path.open('r', encoding='utf-8') as f:
+        if suffix in ('.yaml', '.yml'):
+            if yaml is None:
+                raise ImportError('pyyaml is required to load yaml config')
+            data = yaml.safe_load(f) or {}
+        else:
+            data = json.load(f)
+
+    if profile_name not in data:
+        raise KeyError(f'profile {profile_name} not found in {cfg_path}')
+
+    profile = data[profile_name] or {}
+    if not isinstance(profile, dict):
+        raise ValueError(f'profile {profile_name} must be a dict')
+
+    return profile
 
 
 def optuna_objective(trial, args):
@@ -261,7 +297,8 @@ def _get_transform(args, ellipsoid_model=None, filter_model=None, filter_inferer
             transforms.Orientationd(keys=["image", "label"], axcodes="RAS"),
             transforms.Spacingd(keys=["image", "label"], pixdim=(1.0, 1.0, 1.0),
                                 mode=("bilinear", "nearest")),
-            TumorGenerated(keys=["image", "label"], prob=0.9, ellipsoid_model=ellipsoid_model),
+            TumorGenerated(keys=["image", "label"], prob=0.9, ellipsoid_model=ellipsoid_model,
+                           hparam_overrides=getattr(args, "tumor_hparams", None)),
         ]
         if args.save_syn_data:
             train_transform_list.append(SaveSyntheticallyGeneratedData(folder='syn_run'))
@@ -346,6 +383,13 @@ def _get_transform(args, ellipsoid_model=None, filter_model=None, filter_inferer
 def main():
     args = parser.parse_args()
     args.amp = not args.noamp
+
+    if args.hparam_cfg and not args.hparam_profile:
+        raise ValueError('hparam_profile is required when hparam_cfg is set')
+    if args.hparam_profile and not args.hparam_cfg:
+        raise ValueError('hparam_cfg is required when hparam_profile is set')
+
+    args.tumor_hparams = _load_hparam_profile(args.hparam_cfg, args.hparam_profile)
 
     if args.randaugment_n > 0:
         args.seg_aug_mode = 5
@@ -457,6 +501,8 @@ def main_worker(gpu, args):
     print(args.rank, ' gpu', args.gpu)
     if args.rank == 0:
         print('Batch size is:', args.batch_size, 'epochs', args.max_epochs)
+        if getattr(args, 'tumor_hparams', None):
+            print('TumorGenerated hparams:', args.tumor_hparams)
 
     roi_size = [args.roi_x, args.roi_y, args.roi_x]
     inf_size = [args.roi_x, args.roi_y, args.roi_x]

@@ -1,5 +1,5 @@
 import random
-from typing import Hashable, Mapping, Dict
+from typing import Any, Dict, Hashable, Mapping, Optional
 
 import numpy as np
 from monai.config import KeysCollection
@@ -17,6 +17,7 @@ class TumorGenerated(RandomizableTransform, MapTransform):
                  ellipsoid_model=None,
                  allow_missing_keys: bool = False,
                  use_enhanced_method: bool = False,
+                 hparam_overrides: Optional[Dict[str, Any]] = None,
                  ) -> None:
         MapTransform.__init__(self, keys, allow_missing_keys)
         RandomizableTransform.__init__(self, prob)
@@ -25,6 +26,7 @@ class TumorGenerated(RandomizableTransform, MapTransform):
         self.ellipsoid_model = ellipsoid_model
         self.edge_advanced_blur = False
         self.use_enhanced_method = use_enhanced_method
+        self.hparams = dict(hparam_overrides or {})
 
         self.tumor_types = ['tiny', 'small', 'medium', 'large', 'mix']
 
@@ -51,6 +53,6 @@ class TumorGenerated(RandomizableTransform, MapTransform):
             texture = random.choice(self.textures)
             d['image'][0], d['label'][0] = SynthesisTumor(d['image'][0], d['label'][0], tumor_type, texture,
                                                           self.edge_advanced_blur, self.ellipsoid_model,
-                                                          self.use_enhanced_method)
+                                                          self.use_enhanced_method, self.hparams)
 
         return d
