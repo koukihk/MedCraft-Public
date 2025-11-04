@@ -195,7 +195,7 @@ def check_sobel(mask_scan, potential_point, sobel_threshold=405, sobel_neighborh
     # Return True if the gradient magnitude exceeds the threshold
     return gradient_value > sobel_threshold
 
-def is_edge_point(mask_scan, potential_point, edge_op="both", neighborhood_size=(3, 3, 3), volume_threshold=5,
+def is_edge_point(mask_scan, potential_point, edge_op="both", neighborhood_size=(3, 3, 3), volume_threshold=10,
                   sobel_threshold=400, erosion_kernel_size=5):
     def check_volume():
         # Define the boundaries of the neighborhood around the potential point

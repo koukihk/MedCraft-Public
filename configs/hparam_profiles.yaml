@@ -1,5 +1,7 @@
 baseline: {}
 
+tau_legacy:
+  tau: 5
 tau_low:
   tau: 8
 tau_high:
