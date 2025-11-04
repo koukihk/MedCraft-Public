@@ -291,22 +291,16 @@ def train_epoch_with_mix(model, loader, optimizer, scaler, epoch, loss_func, arg
         data = data.cuda(args.rank, non_blocking=True)
         target = target.cuda(args.rank, non_blocking=True)
 
-        # --- 添加 simple_mixup 逻辑 ---
-        if args.simple_mixup: # 添加一个新的命令行参数来控制
-            # 确保 image 和 label 都在列表中，以应用相同的空间变换
+        if args.simple_mixup: 
             mixed_input = mixup([data, target])
             data = mixed_input[0]
             target = mixed_input[1]
-        # --- 现有 mixup/cutmix 逻辑 ---
         elif args.mixup:
-            # 需要 mixup_loader 来获取随机批次
             data, target = tumor_weighted_mixup_3d(data, target, mixup_loader, alpha=args.mixup_alpha,
                                                   mixup_prob=args.mixup_prob, num_classes=args.num_classes)
         elif args.cutmix:
-            # 需要 mixup_loader 来获取随机批次
             data, target = tumor_aware_cutmix_3d(data, target, mixup_loader, beta=args.cutmix_beta,
                                                  cutmix_prob=args.cutmix_prob, num_classes=args.num_classes)
-        # -----------------------------
 
         optimizer.zero_grad(set_to_none=True)
 
@@ -568,7 +562,7 @@ def run_training(model,
         print(args.rank, time.ctime(), 'Epoch:', epoch)
 
         epoch_time = time.time()
-        train_loss = train_epoch_with_mix(model, train_loader, optimizer, scaler=scaler, epoch=epoch, loss_func=loss_func,
+        train_loss = train_epoch(model, train_loader, optimizer, scaler=scaler, epoch=epoch, loss_func=loss_func,
                                  args=args)
 
         if args.rank == 0:
