@@ -492,9 +492,9 @@ def get_tumor(volume_scan, mask_scan, tumor_type, texture, edge_advanced_blur=Fa
     hyperparams = hyperparams or {}
     geo_mask = get_fixed_geo(mask_scan, tumor_type, ellipsoid_model, hyperparams)
 
-    base_sigma_low, base_sigma_high = _resolve_range(hyperparams.get("sigma2_range"), (1.0, 2.0))
+    base_sigma_low, base_sigma_high = _resolve_range(hyperparams.get("edge_soft"), (1.0, 2.0))
     if edge_advanced_blur:
-        sigma_low, sigma_high = _resolve_range(hyperparams.get("sigma2_edge_range"), (base_sigma_low, 2.1))
+        sigma_low, sigma_high = (1.0, 2.1)
     else:
         sigma_low, sigma_high = base_sigma_low, base_sigma_high
     sigma = np.random.uniform(sigma_low, sigma_high)
@@ -525,9 +525,9 @@ def get_tumor_enhanced(volume_scan, mask_scan, tumor_type, texture, edge_advance
     vessel_condition = volume_scan >= outrange_standard_val
     high_tissue_condition = (volume_scan >= (organ_hu_lowerbound + 2 * interval)) & (volume_scan < outrange_standard_val)
     
-    base_sigma_low, base_sigma_high = _resolve_range(hyperparams.get("sigma2_range"), (1.0, 2.0))
+    base_sigma_low, base_sigma_high = _resolve_range(hyperparams.get("edge_soft"), (1.0, 2.0))
     if edge_advanced_blur:
-        sigma_low, sigma_high = _resolve_range(hyperparams.get("sigma2_edge_range"), (base_sigma_low, 2.2))
+        sigma_low, sigma_high = (1.0, 2.1)
     else:
         sigma_low, sigma_high = base_sigma_low, base_sigma_high
     sigma = np.random.uniform(sigma_low, sigma_high)

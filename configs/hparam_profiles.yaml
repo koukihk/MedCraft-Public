@@ -12,11 +12,6 @@ kappa_low:
 kappa_high:
   kappa: 450
 
-sigma2_narrow:
-  sigma2_range: [0.8, 1.4]
-sigma2_wide:
-  sigma2_range: [1.0, 2.4]
-
 delta_low:
   delta_range: [55, 95]
 delta_high:
@@ -26,12 +21,3 @@ edge_soft:
   sigma2_edge_range: [1.0, 1.6]
 edge_strong:
   sigma2_edge_range: [1.4, 2.2]
-
-combined_demo:
-  tau: 9
-  kappa: 380
-  sigma2_range: [0.9, 1.8]
-  sigma2_edge_range: [1.0, 2.0]
-  delta_range: [70, 140]
-  edge_op: both
-  erosion_kernel_size: 5
