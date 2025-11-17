@@ -18,6 +18,6 @@ delta_high:
   delta_range: [90, 160]
 
 edge_soft:
-  sigma2_edge_range: [1.0, 1.6]
+  sigma2_edge_range: [0.5, 1.5]
 edge_strong:
-  sigma2_edge_range: [1.4, 2.2]
+  sigma2_edge_range: [1.5, 2.5]

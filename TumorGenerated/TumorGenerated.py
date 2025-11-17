@@ -40,7 +40,7 @@ class TumorGenerated(RandomizableTransform, MapTransform):
         predefined_texture_shape = (420, 300, 320)
         for sigma_a in sigma_as:
             for sigma_b in sigma_bs:
-                texture = get_predefined_texture(predefined_texture_shape, sigma_a, sigma_b)
+                texture = get_predefined_texture_b(predefined_texture_shape, sigma_a, sigma_b)
                 self.textures.append(texture)
         print("All predefined texture have generated.")
 

@@ -487,6 +487,7 @@ def get_fixed_geo(mask_scan, tumor_type, ellipsoid_model=None, hyperparams: Opti
 
     return geo_mask
 
+
 def get_tumor(volume_scan, mask_scan, tumor_type, texture, edge_advanced_blur=False, ellipsoid_model=None,
               hyperparams: Optional[Dict[str, Any]] = None):
     hyperparams = hyperparams or {}
@@ -503,10 +504,10 @@ def get_tumor(volume_scan, mask_scan, tumor_type, texture, edge_advanced_blur=Fa
     difference = np.random.uniform(delta_low, delta_high)
 
     # blur the boundary
-    geo_blur = gaussian_filter(geo_mask*1.0, sigma)
+    geo_blur = gaussian_filter(geo_mask * 1.0, sigma)
     abnormally = (volume_scan - texture * geo_blur * difference) * mask_scan
     # abnormally = (volume_scan - texture * geo_mask * difference) * mask_scan
-    
+
     abnormally_full = volume_scan * (1 - mask_scan) + abnormally
     abnormally_mask = mask_scan + geo_mask
 
