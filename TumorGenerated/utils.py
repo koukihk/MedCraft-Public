@@ -584,11 +584,24 @@ def SynthesisTumor(volume_scan, mask_scan, tumor_type, texture, edge_advanced_bl
     # input texture shape: 420, 300, 320
     # we need to cut it into the shape of liver_mask
     # for examples, the liver_mask.shape = 286, 173, 46; we should change the texture shape
+    texture = np.asarray(texture, dtype=np.float32)
     x_length, y_length, z_length = x_end - x_start, y_end - y_start, z_end - z_start
-    start_x = random.randint(0, texture.shape[
-        0] - x_length - 1)  # random select the start point, -1 is to avoid boundary check
-    start_y = random.randint(0, texture.shape[1] - y_length - 1)
-    start_z = random.randint(0, texture.shape[2] - z_length - 1)
+    required_shape = np.array([x_length + 1, y_length + 1, z_length + 1], dtype=np.int32)
+    texture_shape = np.array(texture.shape, dtype=np.int32)
+    repeats = np.ceil(required_shape / texture_shape).astype(np.int32)
+    if np.any(repeats > 1):
+        texture = np.tile(texture, repeats)
+        texture_shape = np.array(texture.shape, dtype=np.int32)
+
+    def _select_start(dim_size: int, length: int) -> int:
+        available = dim_size - length
+        if available <= 0:
+            return 0
+        return random.randint(0, available - 1)
+
+    start_x = _select_start(int(texture_shape[0]), x_length)
+    start_y = _select_start(int(texture_shape[1]), y_length)
+    start_z = _select_start(int(texture_shape[2]), z_length)
     cut_texture = texture[start_x:start_x + x_length, start_y:start_y + y_length, start_z:start_z + z_length]
 
     if use_enhanced_method:
