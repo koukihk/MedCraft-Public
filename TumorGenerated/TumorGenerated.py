@@ -1,4 +1,6 @@
+import logging
 import random
+from pathlib import Path
 from typing import Any, Dict, Hashable, Mapping, Optional
 
 import numpy as np
@@ -28,6 +30,9 @@ class TumorGenerated(RandomizableTransform, MapTransform):
         self.use_enhanced_method = use_enhanced_method
         self.hparams = dict(hparam_overrides or {})
 
+        self.logger = logging.getLogger(self.__class__.__name__)
+        self.textures_root = Path(self.hparams.get("texture_log_root", "."))
+
         self.tumor_types = ['tiny', 'small', 'medium', 'large', 'mix']
 
         assert len(tumor_prob) == 5
@@ -51,8 +56,24 @@ class TumorGenerated(RandomizableTransform, MapTransform):
         if self._do_transform and (np.max(d['label']) <= 1):
             tumor_type = np.random.choice(self.tumor_types, p=self.tumor_prob.ravel())
             texture = random.choice(self.textures)
-            d['image'][0], d['label'][0] = SynthesisTumor(d['image'][0], d['label'][0], tumor_type, texture,
-                                                          self.edge_advanced_blur, self.ellipsoid_model,
-                                                          self.use_enhanced_method, self.hparams)
+            image_metadata = d.get("image_meta_dict") or {}
+            image_id = Path(str(image_metadata.get("filename_or_obj", "unknown"))).name
+            if not self.logger.handlers:
+                logging.basicConfig(level=logging.INFO)
+            d['image'][0], d['label'][0] = SynthesisTumor(
+                volume_scan=d['image'][0],
+                mask_scan=d['label'][0],
+                tumor_type=tumor_type,
+                texture=texture,
+                edge_advanced_blur=self.edge_advanced_blur,
+                ellipsoid_model=self.ellipsoid_model,
+                use_enhanced_method=self.use_enhanced_method,
+                hyperparams=self.hparams,
+                context={
+                    "image_id": image_id,
+                    "logger": self.logger,
+                    "prob": self._do_transform,
+                }
+            )
 
         return d

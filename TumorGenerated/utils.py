@@ -1,4 +1,5 @@
 ### Tumor Generateion
+import logging
 import random
 from typing import Any, Dict, Optional
 
@@ -567,16 +568,42 @@ def get_tumor_enhanced(volume_scan, mask_scan, tumor_type, texture, edge_advance
 
 
 def SynthesisTumor(volume_scan, mask_scan, tumor_type, texture, edge_advanced_blur, ellipsoid_model=None,
-                   use_enhanced_method=False, hyperparams: Optional[Dict[str, Any]] = None):
-    # for speed_generate_tumor, we only send the liver part into the generate program
-    x_start, x_end = np.where(np.any(mask_scan, axis=(1, 2)))[0][[0, -1]]
-    y_start, y_end = np.where(np.any(mask_scan, axis=(0, 2)))[0][[0, -1]]
-    z_start, z_end = np.where(np.any(mask_scan, axis=(0, 1)))[0][[0, -1]]
+                   use_enhanced_method=False, hyperparams: Optional[Dict[str, Any]] = None,
+                   context: Optional[Dict[str, Any]] = None):
+    context = context or {}
+    logger: Optional[logging.Logger] = context.get("logger")
+    image_id = context.get("image_id", "unknown")
+
+    liver_indices = np.where(np.any(mask_scan, axis=(1, 2)))[0]
+    if liver_indices.size == 0:
+        if logger:
+            logger.warning("Empty liver mask detected for %s, skip tumor synthesis.", image_id)
+        return volume_scan, mask_scan
+    x_start, x_end = liver_indices[[0, -1]]
+
+    y_indices = np.where(np.any(mask_scan, axis=(0, 2)))[0]
+    if y_indices.size == 0:
+        if logger:
+            logger.warning("Empty Y liver span for %s, skip tumor synthesis.", image_id)
+        return volume_scan, mask_scan
+    y_start, y_end = y_indices[[0, -1]]
+
+    z_indices = np.where(np.any(mask_scan, axis=(0, 1)))[0]
+    if z_indices.size == 0:
+        if logger:
+            logger.warning("Empty Z liver span for %s, skip tumor synthesis.", image_id)
+        return volume_scan, mask_scan
+    z_start, z_end = z_indices[[0, -1]]
 
     # shrink the boundary
     x_start, x_end = max(0, x_start + 1), min(mask_scan.shape[0], x_end - 1)
     y_start, y_end = max(0, y_start + 1), min(mask_scan.shape[1], y_end - 1)
     z_start, z_end = max(0, z_start + 1), min(mask_scan.shape[2], z_end - 1)
+
+    if x_end <= x_start or y_end <= y_start or z_end <= z_start:
+        if logger:
+            logger.warning("Invalid bounding box after shrink for %s, skip tumor synthesis.", image_id)
+        return volume_scan, mask_scan
 
     liver_volume = volume_scan[x_start:x_end, y_start:y_end, z_start:z_end]
     liver_mask = mask_scan[x_start:x_end, y_start:y_end, z_start:z_end]
@@ -603,6 +630,23 @@ def SynthesisTumor(volume_scan, mask_scan, tumor_type, texture, edge_advanced_bl
     start_y = _select_start(int(texture_shape[1]), y_length)
     start_z = _select_start(int(texture_shape[2]), z_length)
     cut_texture = texture[start_x:start_x + x_length, start_y:start_y + y_length, start_z:start_z + z_length]
+
+    if logger:
+        logger.debug(
+            "SynthesisTumor image=%s bbox=(%s,%s,%s,%s,%s,%s) texture_shape=%s start=(%s,%s,%s) tumor_type=%s",
+            image_id,
+            x_start,
+            x_end,
+            y_start,
+            y_end,
+            z_start,
+            z_end,
+            tuple(texture_shape.tolist()),
+            start_x,
+            start_y,
+            start_z,
+            tumor_type,
+        )
 
     if use_enhanced_method:
         liver_volume, liver_mask = get_tumor_enhanced(liver_volume, liver_mask, tumor_type, cut_texture,
