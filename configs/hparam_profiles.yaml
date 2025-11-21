@@ -17,6 +17,8 @@ delta_low:
 delta_high:
   delta_range: [90, 160]
 
+edge_softest:
+  sigma2_edge_range: [0.0, 1.0]
 edge_soft:
   sigma2_edge_range: [0.5, 1.5]
 edge_strong:

@@ -57,7 +57,8 @@ class TumorGenerated(RandomizableTransform, MapTransform):
             tumor_type = np.random.choice(self.tumor_types, p=self.tumor_prob.ravel())
             texture = random.choice(self.textures)
             image_metadata = d.get("image_meta_dict") or {}
-            image_id = Path(str(image_metadata.get("filename_or_obj", "unknown"))).name
+            image_path = Path(str(image_metadata.get("filename_or_obj", "unknown")))
+            image_id = f"{image_path.parent.name}/{image_path.name}" if image_path.parent.name else image_path.name
             if not self.logger.handlers:
                 logging.basicConfig(level=logging.INFO)
             d['image'][0], d['label'][0] = SynthesisTumor(
