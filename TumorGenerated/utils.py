@@ -120,15 +120,12 @@ def get_absolute_coordinate(relative_coordinate, original_shape, target_volume, 
 
     return np.array([absolute_x, absolute_y, absolute_z], dtype=float)
 
-def ellipsoid_select(mask_scan, ellipsoid_model=None, max_attempts=600, edge_op="both", use_optimized=True,
+def ellipsoid_select(mask_scan, ellipsoid_model=None, max_attempts=600, edge_op="both", use_optimized=False,
                      hyperparams: Optional[Dict[str, Any]] = None):
     hyperparams = hyperparams or {}
-    if use_optimized and ellipsoid_model is not None and not hyperparams:
-        try:
-            from ellipsoid_sampler import optimized_ellipsoid_select
-            return optimized_ellipsoid_select(mask_scan, ellipsoid_model, max_attempts, edge_op)
-        except ImportError:
-            print("Warning: optimized_ellipsoid_select not found, falling back to original method")
+    if use_optimized and ellipsoid_model is not None:
+        from ellipsoid_sampler import optimized_ellipsoid_select
+        return optimized_ellipsoid_select(mask_scan, ellipsoid_model, max_attempts, edge_op)
     
     x_start, x_end = np.where(np.any(mask_scan, axis=(1, 2)))[0][[0, -1]]
     y_start, y_end = np.where(np.any(mask_scan, axis=(0, 2)))[0][[0, -1]]

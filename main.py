@@ -291,7 +291,7 @@ def optuna_run(args):
         print("    {}: {}".format(key, value))
 
 
-def _get_transform(args, ellipsoid_model=None, filter_model=None, filter_inferer=None):
+def _get_transform(args, ellipsoid_model=None):
     if args.syn:
         train_transform_list = [
             transforms.LoadImaged(keys=["image", "label"]),
@@ -514,7 +514,7 @@ def main_worker(gpu, args):
 
     datalist_json = args.json_dir
 
-    train_transform, val_transform = _get_transform(args, ellipsoid_model, filter_model, filter_inferer)
+    train_transform, val_transform = _get_transform(args, ellipsoid_model)
 
     ## NETWORK
     if (args.model_name is None) or args.model_name == 'unet':
