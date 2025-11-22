@@ -533,10 +533,6 @@
             "label": "BDMAP_00001031/segmentations/liver.nii.gz"
         },
         {
-            "image": "BDMAP_00001032/ct.nii.gz",
-            "label": "BDMAP_00001032/segmentations/liver.nii.gz"
-        },
-        {
             "image": "BDMAP_00001034/ct.nii.gz",
             "label": "BDMAP_00001034/segmentations/liver.nii.gz"
         },
@@ -551,6 +547,10 @@
         {
             "image": "BDMAP_00001037/ct.nii.gz",
             "label": "BDMAP_00001037/segmentations/liver.nii.gz"
+        },
+        {
+            "image": "BDMAP_00001038/ct.nii.gz",
+            "label": "BDMAP_00001038/segmentations/liver.nii.gz"
         }
     ],
     "validation":[

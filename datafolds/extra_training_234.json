@@ -533,10 +533,6 @@
             "label": "BDMAP_00001031/segmentations/liver.nii.gz"
         },
         {
-            "image": "BDMAP_00001032/ct.nii.gz",
-            "label": "BDMAP_00001032/segmentations/liver.nii.gz"
-        },
-        {
             "image": "BDMAP_00001034/ct.nii.gz",
             "label": "BDMAP_00001034/segmentations/liver.nii.gz"
         },
@@ -735,10 +731,6 @@
         {
             "image": "BDMAP_00001094/ct.nii.gz",
             "label": "BDMAP_00001094/segmentations/liver.nii.gz"
-        },
-        {
-            "image": "BDMAP_00001095/ct.nii.gz",
-            "label": "BDMAP_00001095/segmentations/liver.nii.gz"
         },
         {
             "image": "BDMAP_00001096/ct.nii.gz",
@@ -951,6 +943,14 @@
         {
             "image": "BDMAP_00001160/ct.nii.gz",
             "label": "BDMAP_00001160/segmentations/liver.nii.gz"
+        },
+        {
+            "image": "BDMAP_00001161/ct.nii.gz",
+            "label": "BDMAP_00001161/segmentations/liver.nii.gz"
+        },
+        {
+            "image": "BDMAP_00001163/ct.nii.gz",
+            "label": "BDMAP_00001163/segmentations/liver.nii.gz"
         }
     ],
     "validation":[
