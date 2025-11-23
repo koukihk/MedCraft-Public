@@ -657,6 +657,13 @@ def main_worker(gpu, args):
         progress=False
     )
 
+    if hasattr(train_ds, "start"):
+        try:
+            train_ds.start()
+        except RuntimeError as cache_start_err:
+            print(f"SmartCache start failed: {cache_start_err}")
+            raise
+
     train_sampler = AMDistributedSampler(train_ds) if args.distributed else None
     train_loader = data.DataLoader(train_ds, batch_size=args.batch_size, shuffle=(train_sampler is None), num_workers=8,
                                    sampler=train_sampler, pin_memory=True, persistent_workers=True)
