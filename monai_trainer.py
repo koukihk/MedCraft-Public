@@ -572,6 +572,14 @@ def run_training(model,
         if args.rank == 0 and writer is not None:
             writer.add_scalar('train_loss', train_loss, epoch)
 
+        if hasattr(train_loader.dataset, "update_cache"):
+            try:
+                train_loader.dataset.update_cache()
+            except Exception as cache_err:
+                if args.rank == 0:
+                    print(f"SmartCache update failed: {cache_err}")
+                raise
+
         b_new_best = False
         val_acc = 0
         if ((epoch + 1) % args.val_every == 0):

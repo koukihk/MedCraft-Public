@@ -152,6 +152,10 @@ parser.add_argument('--json_dir', default=None, type=str)
 parser.add_argument('--extra_train_dir', default=None, type=str)
 parser.add_argument('--extra_json', default=None, type=str)
 parser.add_argument('--cache_num', default=500, type=int)
+parser.add_argument('--cache_rate', default=1.0, type=float,
+                    help='Portion of the dataset to keep in SmartCache (0, 1].')
+parser.add_argument('--cache_replace_rate', default=0.1, type=float,
+                    help='Portion of cached samples to replace when SmartCache updates (0, 1].')
 
 parser.add_argument('--use_pretrained', action='store_true')
 parser.add_argument('--hparam_cfg', default=None, type=str)
@@ -385,6 +389,13 @@ def _get_transform(args, ellipsoid_model=None):
 def main():
     args = parser.parse_args()
     args.amp = not args.noamp
+
+    if args.cache_num <= 0:
+        raise ValueError('cache_num must be a positive integer')
+    if not (0.0 < args.cache_rate <= 1.0):
+        raise ValueError('cache_rate must be in the range (0, 1].')
+    if not (0.0 < args.cache_replace_rate <= 1.0):
+        raise ValueError('cache_replace_rate must be in the range (0, 1].')
 
     if args.hparam_cfg and not args.hparam_profile:
         raise ValueError('hparam_profile is required when hparam_cfg is set')
@@ -633,11 +644,14 @@ def main_worker(gpu, args):
 
     print('train_files files', len(new_datalist), 'validation files', len(new_val_files))
 
+    effective_cache_num = max(1, min(args.cache_num, len(new_datalist)))
+
     train_ds = data.SmartCacheDataset(
         data=train_datalist,
         transform=train_transform,
-        cache_num=min(args.cache_num, len(new_datalist)),
-        cache_rate=1.0,
+        cache_num=effective_cache_num,
+        cache_rate=args.cache_rate,
+        replace_rate=args.cache_replace_rate,
         num_init_workers=max(4, args.workers//2),
         num_replace_workers=2,
         progress=False
