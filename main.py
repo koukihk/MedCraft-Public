@@ -652,8 +652,8 @@ def main_worker(gpu, args):
         cache_num=effective_cache_num,
         cache_rate=args.cache_rate,
         replace_rate=args.cache_replace_rate,
-        num_init_workers=max(4, args.workers//2),
-        num_replace_workers=2,
+        num_init_workers=args.workers,
+        num_replace_workers=max(1, args.workers // 2),
         progress=False
     )
 
@@ -665,12 +665,13 @@ def main_worker(gpu, args):
             raise
 
     train_sampler = AMDistributedSampler(train_ds) if args.distributed else None
-    train_loader = data.DataLoader(train_ds, batch_size=args.batch_size, shuffle=(train_sampler is None), num_workers=8,
+    print(f"Using {args.workers} workers for DataLoader")
+    train_loader = data.DataLoader(train_ds, batch_size=args.batch_size, shuffle=(train_sampler is None), num_workers=args.workers,
                                    sampler=train_sampler, pin_memory=True, persistent_workers=True)
 
     val_ds = data.Dataset(data=new_val_files, transform=val_transform)
     val_sampler = AMDistributedSampler(val_ds, shuffle=False) if args.distributed else None
-    val_loader = data.DataLoader(val_ds, batch_size=1, shuffle=False, num_workers=4, sampler=val_sampler,
+    val_loader = data.DataLoader(val_ds, batch_size=1, shuffle=False, num_workers=args.workers, sampler=val_sampler,
                                  pin_memory=True)
 
     model_inferer = partial(sliding_window_inference, roi_size=inf_size, sw_batch_size=1, predictor=model,
